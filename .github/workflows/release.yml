@@ -1,0 +1,53 @@
+name: Build and Release VSIX
+
+on:
+  push:
+    tags:
+      - 'v*' # Kích hoạt khi tác giả gắn tag mới, ví dụ: v1.0.0, v0.1.0
+  workflow_dispatch: # Cho phép chạy thủ công từ tab "Actions" trên GitHub
+
+permissions:
+  contents: write # Cấp quyền tạo Release và upload file đính kèm
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      # Chạy script build/compile của extension nếu có
+      - name: Compile extension
+        run: npm run compile --if-present
+
+      # Đóng gói ra file .vsix bằng công cụ chính thức @vscode/vsce
+      - name: Package Extension (.vsix)
+        run: npx @vscode/vsce package --no-git-tag-version
+
+      - name: Find generated VSIX
+        id: vsix_info
+        run: |
+          VSIX_PATH=$(ls *.vsix | head -n 1)
+          echo "file_path=$VSIX_PATH" >> $GITHUB_OUTPUT
+          echo "Found VSIX package: $VSIX_PATH"
+
+      # Tạo GitHub Release và upload file .vsix
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.vsix_info.outputs.file_path }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
