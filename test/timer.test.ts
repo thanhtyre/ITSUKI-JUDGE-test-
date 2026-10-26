@@ -184,4 +184,45 @@ describe('Timer Utility and Elapsed Calculation Tests', () => {
     assert.strictEqual(computeSessionElapsed(timerA, t), 100); // 60 + 40 = 100
     assert.strictEqual(computeSessionElapsed(timerB, t), 300); // fileB remains 300
   });
+
+  it('Pausing timer preserves accumulated time and does not reset or count from 0', () => {
+    const { computeSessionElapsed } = require('../src/utils/timerUtils');
+
+    const startedAt = 1000000;
+    const timer = {
+      birthtimeMs: startedAt,
+      firstOpenedAt: startedAt,
+      lastOpenedAt: startedAt,
+      sessionOpenedAt: startedAt,
+      accumulatedMs: 0,
+      isRunning: true,
+      isPausedByUser: false,
+      lastStartedAt: startedAt,
+    };
+
+    // User solves problem for 25 seconds
+    const pauseTime = startedAt + 25000;
+    assert.strictEqual(computeSessionElapsed(timer, pauseTime), 25000);
+
+    // User presses Pause button
+    timer.accumulatedMs += Math.max(0, pauseTime - timer.lastStartedAt);
+    timer.isRunning = false;
+    timer.isPausedByUser = true;
+
+    // After pause, elapsed time MUST stay 25s at any future timestamp (does NOT reset to 0)
+    assert.strictEqual(computeSessionElapsed(timer, pauseTime + 5000), 25000);
+    assert.strictEqual(computeSessionElapsed(timer, pauseTime + 60000), 25000);
+
+    // User presses Resume 60s later
+    const resumeTime = pauseTime + 60000;
+    timer.lastStartedAt = resumeTime;
+    timer.isRunning = true;
+    timer.isPausedByUser = false;
+
+    // Immediately at resume time, elapsed is still 25000
+    assert.strictEqual(computeSessionElapsed(timer, resumeTime), 25000);
+
+    // 10 seconds after resume, elapsed is 35000 (continues from 25000, not from 0)
+    assert.strictEqual(computeSessionElapsed(timer, resumeTime + 10000), 35000);
+  });
 });

@@ -239,17 +239,21 @@ class JudgeViewProvider {
             if (statMtimeMs) {
                 timer.mtimeMs = statMtimeMs;
             }
-            timer.lastOpenedAt = now;
-            if (!timer.isPausedByUser) {
-                timer.isRunning = true;
-                timer.lastStartedAt = now;
-            }
         }
         return timer;
     }
     async loadActiveFileConfig(filePath) {
         this.problemConfig = await this.storageManager.loadProblemConfig(filePath);
+        const isExisting = this.fileTimers.has(filePath);
         const timerInfo = this.getOrCreateTimer(filePath);
+        if (isExisting) {
+            const now = Date.now();
+            timerInfo.lastOpenedAt = now;
+            if (!timerInfo.isPausedByUser && !timerInfo.isRunning) {
+                timerInfo.isRunning = true;
+                timerInfo.lastStartedAt = now;
+            }
+        }
         // Send active file info with timer
         this.postMessage({
             type: 'setActiveFile',
@@ -586,19 +590,19 @@ class JudgeViewProvider {
 
   <!-- Solve & File Timer Bar -->
   <section class="timer-section" id="timer-bar">
-    <div class="timer-display-group" id="timer-display" title="Click to cycle: Opened ↔ Created ↔ Session">
+    <div class="timer-display-group" id="timer-display" title="Click to cycle: Session ↔ Opened ↔ Created">
       <div class="timer-main">
         <svg class="timer-icon" viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
           <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/>
           <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/>
         </svg>
-        <span class="timer-mode-tag mode-opened" id="timer-mode-tag">OPENED</span>
+        <span class="timer-mode-tag mode-session" id="timer-mode-tag">SESSION</span>
         <span class="timer-digits" id="timer-digits">00:00:00</span>
       </div>
-      <div class="timer-subtext" id="timer-secondary-text" title="File creation & session details">Created: -- · Session: 00:00:00</div>
+      <div class="timer-subtext" id="timer-secondary-text" title="File creation & session details">Opened: -- · Created: --</div>
     </div>
     <div class="timer-actions">
-      <button id="btn-timer-toggle-mode" class="timer-action-btn" title="Cycle Mode: Opened ↔ Created ↔ Session">
+      <button id="btn-timer-toggle-mode" class="timer-action-btn" title="Cycle Mode: Session ↔ Opened ↔ Created">
         <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
           <path d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 5H14.5a.5.5 0 0 0 .5-.5z"/>
         </svg>

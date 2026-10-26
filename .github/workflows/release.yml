@@ -48,6 +48,6 @@ jobs:
           files: ${{ steps.vsix_info.outputs.file_path }}
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

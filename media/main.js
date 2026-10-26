@@ -10,7 +10,7 @@
   let allExpanded = false;
   let isJudging = false;
 
-  // Timer State: 3 modes ('opened' | 'created' | 'session')
+  // Timer State: 3 modes ('session' | 'opened' | 'created')
   let timerInfo = {
     birthtimeMs: 0,
     mtimeMs: 0,
@@ -22,7 +22,7 @@
     isPausedByUser: false,
     lastStartedAt: Date.now(),
   };
-  let timerMode = 'opened'; // 'opened' | 'created' | 'session'
+  let timerMode = 'session'; // 'session' | 'opened' | 'created'
   let timerTickInterval = null;
 
   // DOM Elements
@@ -104,31 +104,7 @@
     // Clean old mode styling classes
     timerModeTagEl?.classList.remove('mode-opened', 'mode-created', 'mode-session', 'mode-paused');
 
-    if (timerMode === 'opened') {
-      if (timerDigitsEl) timerDigitsEl.textContent = formatHms(openedElapsed);
-      if (timerModeTagEl) {
-        timerModeTagEl.textContent = 'OPENED';
-        timerModeTagEl.classList.add('mode-opened');
-      }
-      if (timerSecondaryTextEl) {
-        const createdStr = timerInfo.birthtimeMs ? `Created: ${formatRelativeTime(timerInfo.birthtimeMs)}` : '';
-        const sessionStr = `Session: ${formatHms(sessionElapsed)}`;
-        timerSecondaryTextEl.textContent = createdStr ? `${createdStr} · ${sessionStr}` : sessionStr;
-      }
-      timerDisplayGroupEl?.setAttribute('title', `Mode: OPENED (${formatRelativeTime(timerInfo.lastOpenedAt || timerInfo.sessionOpenedAt || now)}). Click to cycle: Opened ↔ Created ↔ Session`);
-    } else if (timerMode === 'created') {
-      if (timerDigitsEl) timerDigitsEl.textContent = formatHms(createdElapsed);
-      if (timerModeTagEl) {
-        timerModeTagEl.textContent = 'CREATED';
-        timerModeTagEl.classList.add('mode-created');
-      }
-      if (timerSecondaryTextEl) {
-        const openedStr = `Opened: ${formatRelativeTime(timerInfo.lastOpenedAt || timerInfo.sessionOpenedAt || now)}`;
-        const sessionStr = `Session: ${formatHms(sessionElapsed)}`;
-        timerSecondaryTextEl.textContent = `${openedStr} · ${sessionStr}`;
-      }
-      timerDisplayGroupEl?.setAttribute('title', `Mode: CREATED (${formatRelativeTime(timerInfo.birthtimeMs)}). Click to cycle: Opened ↔ Created ↔ Session`);
-    } else {
+    if (timerMode === 'session') {
       // Session mode (Active solve stopwatch)
       if (timerDigitsEl) timerDigitsEl.textContent = formatHms(sessionElapsed);
       if (timerModeTagEl) {
@@ -145,7 +121,32 @@
         const createdStr = timerInfo.birthtimeMs ? `Created: ${formatRelativeTime(timerInfo.birthtimeMs)}` : '';
         timerSecondaryTextEl.textContent = createdStr ? `${openedStr} · ${createdStr}` : openedStr;
       }
-      timerDisplayGroupEl?.setAttribute('title', `Mode: SESSION (${formatHms(sessionElapsed)} active solve time). Click to cycle: Opened ↔ Created ↔ Session`);
+      timerDisplayGroupEl?.setAttribute('title', `Mode: SESSION (${formatHms(sessionElapsed)} active solve time). Click to cycle: Session ↔ Opened ↔ Created`);
+    } else if (timerMode === 'opened') {
+      if (timerDigitsEl) timerDigitsEl.textContent = formatHms(openedElapsed);
+      if (timerModeTagEl) {
+        timerModeTagEl.textContent = 'OPENED';
+        timerModeTagEl.classList.add('mode-opened');
+      }
+      if (timerSecondaryTextEl) {
+        const createdStr = timerInfo.birthtimeMs ? `Created: ${formatRelativeTime(timerInfo.birthtimeMs)}` : '';
+        const sessionStr = `Session: ${formatHms(sessionElapsed)}`;
+        timerSecondaryTextEl.textContent = createdStr ? `${createdStr} · ${sessionStr}` : sessionStr;
+      }
+      timerDisplayGroupEl?.setAttribute('title', `Mode: OPENED (${formatRelativeTime(timerInfo.lastOpenedAt || timerInfo.sessionOpenedAt || now)}). Click to cycle: Session ↔ Opened ↔ Created`);
+    } else {
+      // Created mode
+      if (timerDigitsEl) timerDigitsEl.textContent = formatHms(createdElapsed);
+      if (timerModeTagEl) {
+        timerModeTagEl.textContent = 'CREATED';
+        timerModeTagEl.classList.add('mode-created');
+      }
+      if (timerSecondaryTextEl) {
+        const openedStr = `Opened: ${formatRelativeTime(timerInfo.lastOpenedAt || timerInfo.sessionOpenedAt || now)}`;
+        const sessionStr = `Session: ${formatHms(sessionElapsed)}`;
+        timerSecondaryTextEl.textContent = `${openedStr} · ${sessionStr}`;
+      }
+      timerDisplayGroupEl?.setAttribute('title', `Mode: CREATED (${formatRelativeTime(timerInfo.birthtimeMs)}). Click to cycle: Session ↔ Opened ↔ Created`);
     }
 
     // Play/Pause icon update
@@ -172,22 +173,24 @@
     updateTimerUi();
   }
 
-  // Timer controls: Cycle between 'opened' ➔ 'created' ➔ 'session'
+  // Timer controls: Cycle between 'session' ➔ 'opened' ➔ 'created'
   function toggleTimerMode() {
-    if (timerMode === 'opened') {
-      timerMode = 'created';
-    } else if (timerMode === 'created') {
-      timerMode = 'session';
-    } else {
+    if (timerMode === 'session') {
       timerMode = 'opened';
+    } else if (timerMode === 'opened') {
+      timerMode = 'created';
+    } else {
+      timerMode = 'session';
     }
     updateTimerUi();
   }
 
   function toggleTimerPause() {
     const now = Date.now();
+    // Switch to session stopwatch mode if in other mode so user immediately sees paused timer
+    timerMode = 'session';
     if (timerInfo.isRunning) {
-      timerInfo.accumulatedMs += Math.max(0, now - timerInfo.lastStartedAt);
+      timerInfo.accumulatedMs = (timerInfo.accumulatedMs || 0) + Math.max(0, now - (timerInfo.lastStartedAt || now));
       timerInfo.isRunning = false;
       timerInfo.isPausedByUser = true;
     } else {
@@ -201,6 +204,7 @@
 
   function resetTimer() {
     const now = Date.now();
+    timerMode = 'session';
     timerInfo.accumulatedMs = 0;
     timerInfo.lastStartedAt = now;
     timerInfo.sessionOpenedAt = now;

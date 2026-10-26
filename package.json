@@ -2,7 +2,7 @@
   "name": "itsuki-judge",
   "displayName": "ITSUKI JUDGE",
   "description": "Competitive Programming Online/Local Judge extension for VS Code & VSCodium",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "harutoitsuki",
   "repository": {
     "type": "git",

@@ -26,24 +26,24 @@
     </header>
 
     <div class="p-4 space-y-3.5">
-      <!-- Feature: Real-time 3-Mode Timer (Opened, Created, Session) -->
+      <!-- Feature: Real-time 3-Mode Timer (Session, Opened, Created) -->
       <section id="timer-box" class="flex items-center justify-between p-3 bg-black/20 border border-[var(--border,#30363d)] rounded-lg transition-colors duration-200 hover:border-sky-500/50">
-        <div id="timer-clickable" class="flex flex-col cursor-pointer flex-1 mr-2" title="Click to cycle: Opened ↔ Created ↔ Session">
+        <div id="timer-clickable" class="flex flex-col cursor-pointer flex-1 mr-2" title="Click to cycle: Session ↔ Opened ↔ Created">
           <div class="flex items-center gap-2">
             <svg id="timer-icon" class="w-4 h-4 text-sky-400 flex-shrink-0 transition-colors" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/>
               <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/>
             </svg>
-            <span id="timer-tag" class="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 tracking-wider">OPENED</span>
-            <span id="timer-val" class="font-mono text-sm font-bold tracking-wider text-[var(--foreground,#cccccc)]">00:15:32</span>
+            <span id="timer-tag" class="text-xs font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 tracking-wider">SESSION</span>
+            <span id="timer-val" class="font-mono text-sm font-bold tracking-wider text-[var(--foreground,#cccccc)]">00:12:40</span>
           </div>
           <div id="timer-sub" class="text-xs text-[var(--muted-foreground,#888888)] pl-0.5 mt-1 truncate">
-            Created: 2h 15m ago · Session: 00:12:40
+            Opened: 15m ago · Created: 2h ago
           </div>
         </div>
 
         <div class="flex items-center gap-1.5 flex-shrink-0">
-          <button id="btn-mode-toggle" class="p-1.5 rounded text-[var(--muted-foreground,#888888)] hover:text-[var(--foreground,#cccccc)] hover:bg-white/10 transition" title="Cycle Mode: Opened ↔ Created ↔ Session">
+          <button id="btn-mode-toggle" class="p-1.5 rounded text-[var(--muted-foreground,#888888)] hover:text-[var(--foreground,#cccccc)] hover:bg-white/10 transition" title="Cycle Mode: Session ↔ Opened ↔ Created">
             <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
               <path d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 5H14.5a.5.5 0 0 0 .5-.5z"/>
             </svg>
@@ -298,8 +298,8 @@
   <!-- Real-time Interactive Logic -->
   <script>
     (function () {
-      // 3 Timer Modes: 'opened' | 'created' | 'session'
-      let timerMode = 'opened';
+      // 3 Timer Modes: 'session' | 'opened' | 'created'
+      let timerMode = 'session';
       let isPaused = false;
       let sessionAccumulatedMs = 760000; // ~12m 40s
       let sessionLastStarted = Date.now();
@@ -340,18 +340,7 @@
         const openedElapsed = Math.max(0, now - fileLastOpened);
         const createdElapsed = Math.max(0, now - fileBirthtime);
 
-        if (timerMode === 'opened') {
-          timerValEl.textContent = formatHms(openedElapsed);
-          timerTagEl.textContent = 'OPENED';
-          timerTagEl.className = 'text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 tracking-wider';
-          timerSubEl.textContent = `Created: ${formatRelative(now - fileBirthtime)} · Session: ${formatHms(sessionElapsed)}`;
-        } else if (timerMode === 'created') {
-          timerValEl.textContent = formatHms(createdElapsed);
-          timerTagEl.textContent = 'CREATED';
-          timerTagEl.className = 'text-xs font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 tracking-wider';
-          timerSubEl.textContent = `Opened: ${formatRelative(now - fileLastOpened)} · Session: ${formatHms(sessionElapsed)}`;
-        } else {
-          // Session mode
+        if (timerMode === 'session') {
           timerValEl.textContent = formatHms(sessionElapsed);
           if (isPaused) {
             timerTagEl.textContent = 'PAUSED';
@@ -361,6 +350,17 @@
             timerTagEl.className = 'text-xs font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30 tracking-wider';
           }
           timerSubEl.textContent = `Opened: ${formatRelative(now - fileLastOpened)} · Created: ${formatRelative(now - fileBirthtime)}`;
+        } else if (timerMode === 'opened') {
+          timerValEl.textContent = formatHms(openedElapsed);
+          timerTagEl.textContent = 'OPENED';
+          timerTagEl.className = 'text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 tracking-wider';
+          timerSubEl.textContent = `Created: ${formatRelative(now - fileBirthtime)} · Session: ${formatHms(sessionElapsed)}`;
+        } else {
+          // Created mode
+          timerValEl.textContent = formatHms(createdElapsed);
+          timerTagEl.textContent = 'CREATED';
+          timerTagEl.className = 'text-xs font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 tracking-wider';
+          timerSubEl.textContent = `Opened: ${formatRelative(now - fileLastOpened)} · Session: ${formatHms(sessionElapsed)}`;
         }
 
         if (isPaused) {
@@ -380,9 +380,9 @@
       updateClock();
 
       function cycleMode() {
-        if (timerMode === 'opened') timerMode = 'created';
-        else if (timerMode === 'created') timerMode = 'session';
-        else timerMode = 'opened';
+        if (timerMode === 'session') timerMode = 'opened';
+        else if (timerMode === 'opened') timerMode = 'created';
+        else timerMode = 'session';
         updateClock();
       }
 
@@ -394,6 +394,7 @@
 
       document.getElementById('btn-pause-toggle').addEventListener('click', (e) => {
         e.stopPropagation();
+        timerMode = 'session';
         const now = Date.now();
         if (!isPaused) {
           sessionAccumulatedMs += Math.max(0, now - sessionLastStarted);
@@ -407,6 +408,7 @@
 
       document.getElementById('btn-reset-toggle').addEventListener('click', (e) => {
         e.stopPropagation();
+        timerMode = 'session';
         sessionAccumulatedMs = 0;
         sessionLastStarted = Date.now();
         isPaused = false;
