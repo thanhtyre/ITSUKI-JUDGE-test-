@@ -25,6 +25,9 @@
   let timerMode = 'session'; // 'session' | 'opened' | 'created'
   let timerTickInterval = null;
 
+  // Persistent resized element heights per test case (tc.id -> { input, expected, actual, diff, error })
+  const cardElementHeights = new Map();
+
   // DOM Elements
   const activeFileNameEl = document.getElementById('active-filename');
   const activeLanguageEl = document.getElementById('active-language');
@@ -301,6 +304,17 @@
 
   btnToggleExpand?.addEventListener('click', () => {
     allExpanded = !allExpanded;
+    testCases.forEach((tc) => {
+      tc.isExpanded = allExpanded;
+    });
+    testCardsContainer?.querySelectorAll('.test-card').forEach((card) => {
+      card.classList.toggle('expanded', allExpanded);
+      if (allExpanded) {
+        const inEl = card.querySelector('.input-area');
+        const id = inEl?.getAttribute('data-id');
+        if (id) restoreCardHeights(card, id);
+      }
+    });
     vscode.postMessage({ type: 'toggleExpandAll', isExpanded: allExpanded });
   });
 
@@ -546,12 +560,101 @@
     }
   }
 
+  let cardResizeObserver = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    cardResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const target = entry.target;
+        if (target && target.style && target.style.height) {
+          const card = target.closest('.test-card');
+          if (card) {
+            const inEl = card.querySelector('.input-area');
+            const tcId = inEl?.getAttribute('data-id');
+            if (tcId) {
+              const existing = cardElementHeights.get(tcId) || {};
+              if (target.classList.contains('input-area')) {
+                existing.input = target.style.height;
+              } else if (target.classList.contains('output-area')) {
+                existing.expected = target.style.height;
+              } else if (target.classList.contains('actual-output-area')) {
+                existing.actual = target.style.height;
+              } else if (target.classList.contains('diff-container')) {
+                existing.diff = target.style.height;
+              } else if (target.classList.contains('error-output-box')) {
+                existing.error = target.style.height;
+              }
+              cardElementHeights.set(tcId, existing);
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function captureCardHeights(cardEl, tcId) {
+    if (!cardEl || !tcId) return;
+    const inEl = cardEl.querySelector('.input-area');
+    const outEl = cardEl.querySelector('.output-area');
+    const actualEl = cardEl.querySelector('.actual-output-area, .field-textarea.readonly');
+    const diffEl = cardEl.querySelector('.diff-container');
+    const errorEl = cardEl.querySelector('.error-output-box');
+
+    const existing = cardElementHeights.get(tcId) || {};
+    if (inEl && inEl.style && inEl.style.height) existing.input = inEl.style.height;
+    if (outEl && outEl.style && outEl.style.height) existing.expected = outEl.style.height;
+    if (actualEl && actualEl.style && actualEl.style.height) existing.actual = actualEl.style.height;
+    if (diffEl && diffEl.style && diffEl.style.height) existing.diff = diffEl.style.height;
+    if (errorEl && errorEl.style && errorEl.style.height) existing.error = errorEl.style.height;
+    cardElementHeights.set(tcId, existing);
+  }
+
+  function restoreCardHeights(cardEl, tcId) {
+    if (!cardEl || !tcId) return;
+    const saved = cardElementHeights.get(tcId);
+    if (!saved) return;
+    const inEl = cardEl.querySelector('.input-area');
+    const outEl = cardEl.querySelector('.output-area');
+    const actualEl = cardEl.querySelector('.actual-output-area, .field-textarea.readonly');
+    const diffEl = cardEl.querySelector('.diff-container');
+    const errorEl = cardEl.querySelector('.error-output-box');
+
+    if (inEl && saved.input) inEl.style.height = saved.input;
+    if (outEl && saved.expected) outEl.style.height = saved.expected;
+    if (actualEl && saved.actual) actualEl.style.height = saved.actual;
+    if (diffEl && saved.diff) diffEl.style.height = saved.diff;
+    if (errorEl && saved.error) errorEl.style.height = saved.error;
+  }
+
+  function observeCardResizes(cardEl, tcId) {
+    if (!cardResizeObserver || !cardEl) return;
+    const elementsToObserve = cardEl.querySelectorAll(
+      '.input-area, .output-area, .actual-output-area, .diff-container, .error-output-box'
+    );
+    elementsToObserve.forEach((el) => {
+      cardResizeObserver.observe(el);
+    });
+  }
+
+  window.addEventListener('mouseup', () => {
+    testCardsContainer?.querySelectorAll('.test-card').forEach((card) => {
+      const inEl = card.querySelector('.input-area');
+      const id = inEl?.getAttribute('data-id');
+      if (id) captureCardHeights(card, id);
+    });
+  });
+
   function renderTestCases() {
     if (!testCardsContainer) return;
 
     if (testCountEl) {
       testCountEl.textContent = `${testCases.length} test case${testCases.length !== 1 ? 's' : ''}`;
     }
+
+    testCardsContainer.querySelectorAll('.test-card').forEach((card) => {
+      const inEl = card.querySelector('.input-area');
+      const id = inEl?.getAttribute('data-id');
+      if (id) captureCardHeights(card, id);
+    });
 
     if (testCases.length === 0) {
       testCardsContainer.innerHTML = '';
@@ -575,16 +678,47 @@
 
     card.innerHTML = buildCardInnerHtml(tc);
     bindCardEvents(card, tc);
+    restoreCardHeights(card, tc.id);
+    observeCardResizes(card, tc.id);
     return card;
   }
 
   function updateSingleCard(tc) {
     const existing = document.getElementById(`test-card-${tc.id}`);
-    if (existing) {
-      existing.className = `test-card ${tc.isExpanded ? 'expanded' : ''} ${getVerdictClass(tc.verdict)}`;
+    if (!existing) return;
+
+    captureCardHeights(existing, tc.id);
+
+    existing.className = `test-card ${tc.isExpanded ? 'expanded' : ''} ${getVerdictClass(tc.verdict)}`;
+
+    const metaEl = existing.querySelector('.card-meta');
+    if (metaEl) {
+      metaEl.innerHTML = getVerdictBadgeHtml(tc.verdict) + buildMetricsHtml(tc);
+    }
+
+    const resultsArea = existing.querySelector('.card-results-area');
+    if (resultsArea) {
+      resultsArea.innerHTML = buildResultsHtml(tc);
+      resultsArea.querySelectorAll('.btn-copy').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const target = btn.getAttribute('data-copy-target');
+          let textToCopy = '';
+          if (target === 'actual') {
+            textToCopy = tc.actualOutput || '';
+          } else if (target === 'error') {
+            textToCopy = tc.errorMessage || '';
+          }
+          copyTextToClipboard(textToCopy, btn);
+        });
+      });
+    } else {
       existing.innerHTML = buildCardInnerHtml(tc);
       bindCardEvents(existing, tc);
     }
+
+    restoreCardHeights(existing, tc.id);
+    observeCardResizes(existing, tc.id);
   }
 
   function getVerdictClass(verdict) {
@@ -639,10 +773,7 @@
     return `<span class="verdict-badge ${v.toLowerCase()}">${icon}<span>${v}</span></span>`;
   }
 
-  function buildCardInnerHtml(tc) {
-    const verdictBadgeHtml = getVerdictBadgeHtml(tc.verdict);
-
-    // Execution time & memory badge HTML
+  function buildMetricsHtml(tc) {
     let metricsHtml = '';
     if (tc.executionTimeMs !== undefined) {
       metricsHtml += `<span class="metric-tag" title="Execution Time">${tc.executionTimeMs}ms</span>`;
@@ -650,9 +781,31 @@
     if (tc.memoryUsageMb !== undefined && tc.memoryUsageMb > 0) {
       metricsHtml += `<span class="metric-tag" title="Memory Usage">${tc.memoryUsageMb}MB</span>`;
     }
+    return metricsHtml;
+  }
+
+  function buildResultsHtml(tc) {
+    let html = '';
+
+    // Actual Output HTML
+    if (tc.actualOutput !== undefined) {
+      html += `
+        <div class="field-group">
+          <div class="field-header">
+            <span class="field-label">ACTUAL OUTPUT</span>
+            <button class="btn-copy" data-copy-target="actual" title="Copy actual output">
+              <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
+                <path d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-1H8v1a0 0 0 0 1 0 0H2a0 0 0 0 1 0 0V6a0 0 0 0 1 0 0h1V5H2z"/>
+              </svg>
+              <span>Copy</span>
+            </button>
+          </div>
+          <textarea class="field-textarea readonly actual-output-area" readonly spellcheck="false">${escapeHtml(tc.actualOutput)}</textarea>
+        </div>
+      `;
+    }
 
     // Diff view HTML
-    let diffHtml = '';
     if (tc.diff && tc.diff.hasDifference) {
       const rowsHtml = tc.diff.diffLines
         .slice(0, 50)
@@ -666,7 +819,7 @@
         })
         .join('');
 
-      diffHtml = `
+      html += `
         <div class="field-group">
           <div class="field-header">
             <span class="field-label diff-header-label">
@@ -695,29 +848,9 @@
       `;
     }
 
-    // Actual Output HTML
-    let actualOutputHtml = '';
-    if (tc.actualOutput !== undefined) {
-      actualOutputHtml = `
-        <div class="field-group">
-          <div class="field-header">
-            <span class="field-label">ACTUAL OUTPUT</span>
-            <button class="btn-copy" data-copy-target="actual" title="Copy actual output">
-              <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
-                <path d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-1H8v1a0 0 0 0 1 0 0H2a0 0 0 0 1 0 0V6a0 0 0 0 1 0 0h1V5H2z"/>
-              </svg>
-              <span>Copy</span>
-            </button>
-          </div>
-          <textarea class="field-textarea readonly" readonly spellcheck="false">${escapeHtml(tc.actualOutput)}</textarea>
-        </div>
-      `;
-    }
-
     // Error details HTML (RTE / Stderr)
-    let errorDetailsHtml = '';
     if (tc.errorMessage) {
-      errorDetailsHtml = `
+      html += `
         <div class="field-group">
           <div class="field-header">
             <span class="field-label" style="color:#f85149">ERROR DETAILS / STDERR</span>
@@ -732,6 +865,14 @@
         </div>
       `;
     }
+
+    return html;
+  }
+
+  function buildCardInnerHtml(tc) {
+    const verdictBadgeHtml = getVerdictBadgeHtml(tc.verdict);
+    const metricsHtml = buildMetricsHtml(tc);
+    const resultsHtml = buildResultsHtml(tc);
 
     return `
       <div class="card-header" data-id="${tc.id}">
@@ -787,9 +928,9 @@
           <textarea class="field-textarea output-area" data-id="${tc.id}" spellcheck="false" placeholder="Enter expected output...">${escapeHtml(tc.expectedOutput)}</textarea>
         </div>
 
-        ${actualOutputHtml}
-        ${diffHtml}
-        ${errorDetailsHtml}
+        <div class="card-results-area">
+          ${resultsHtml}
+        </div>
       </div>
     `;
   }
@@ -861,6 +1002,9 @@
       }
       tc.isExpanded = !tc.isExpanded;
       card.classList.toggle('expanded', tc.isExpanded);
+      if (tc.isExpanded) {
+        restoreCardHeights(card, tc.id);
+      }
       vscode.postMessage({
         type: 'toggleExpand',
         id: tc.id,
